@@ -149,7 +149,7 @@ drake_pybind_library(
     cc_srcs = ["trajectories_py.cc"],
     package_info = PACKAGE_INFO,
     py_deps = [
-        ":common_py",
+        ":common_py"
     ],
 )
 

@@ -19,6 +19,8 @@
 #include "drake/systems/primitives/signal_logger.h"
 #include "drake/systems/primitives/wrap_to_system.h"
 #include "drake/systems/primitives/zero_order_hold.h"
+#include "drake/systems/primitives/trajectory_source.h"
+#include "drake/common/trajectories/trajectory.h"
 
 namespace drake {
 namespace pydrake {
@@ -169,6 +171,13 @@ PYBIND11_MODULE(primitives, m) {
 
   m.def("IsObservable", &IsObservable, py::arg("sys"),
         py::arg("threshold") = nullopt);
+
+  py::class_<TrajectorySource<double>, SingleOutputVectorSource<double>>(m,
+                                                                         "TrajectorySource")
+      .def(py::init<const trajectories::Trajectory<double> &, int, bool>(), 
+           py::arg("trajectory"), 
+           py::arg("output_derivative_order") = 0,
+           py::arg("zero_derivatives_beyond_limits") = true);
 
   // TODO(eric.cousineau): Add more systems as needed.
 }

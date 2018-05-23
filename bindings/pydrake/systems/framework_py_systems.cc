@@ -16,6 +16,7 @@
 #include "drake/systems/framework/system.h"
 #include "drake/systems/framework/system_scalar_converter.h"
 #include "drake/systems/framework/vector_system.h"
+#include "drake/systems/framework/single_output_vector_source.h"
 
 using std::make_unique;
 using std::string;
@@ -37,6 +38,7 @@ using systems::PublishEvent;
 using systems::DiscreteUpdateEvent;
 using systems::DiscreteValues;
 using systems::SystemScalarConverter;
+using systems::SingleOutputVectorSource;
 
 // Provides a templated 'namespace'.
 template <typename T>
@@ -238,6 +240,45 @@ struct Impl {
     }
   };
 
+  class SingleOutputVectorSourcePublic : public SingleOutputVectorSource<T> {
+   public:
+    using Base = SingleOutputVectorSource<T>;
+
+    SingleOutputVectorSourcePublic(int size)
+        : Base(size) {}
+
+    // Virtual methods, for explicit bindings.
+    using Base::DoCalcVectorOutput;
+
+    virtual void DoCalcVectorOutput(
+      const Context<T>& context,
+      Eigen::VectorBlock<VectorX<T>>* output) const = 0;
+  };
+
+  class PySingleOutputVectorSource : public py::wrapper<SingleOutputVectorSourcePublic> {
+   public:
+    using Base = py::wrapper<SingleOutputVectorSourcePublic>;
+    using Base::Base;
+
+    void DoCalcVectorOutput(
+        const Context<T>& context,
+        Eigen::VectorBlock<VectorX<T>>* output) const override {
+      // WARNING: Mutating `output` will not work when T is AutoDiffXd,
+      // Expression, etc. See
+      // https://github.com/pybind/pybind11/pull/1152#issuecomment-340091423
+      // TODO(eric.cousineau): This will be resolved once dtype=custom is
+      // resolved.
+      PYBIND11_OVERLOAD_PURE(
+          void, SingleOutputVectorSource<T>, "_DoCalcVectorOutput",
+          // N.B. Passing `Eigen::Map<>` derived classes by reference rather
+          // than pointer to ensure conceptual clarity. pybind11 `type_caster`
+          // struggles with types of `Map<Derived>*`, but not `Map<Derived>&`.
+          &context, ToEigenRef(output));
+      // If the macro did not return, use default functionality.
+      Base::DoCalcVectorOutput(context, output);
+    }
+  };
+
   static void DoDefinitions(py::module m) {
     // NOLINTNEXTLINE(build/namespaces): Emulate placement in namespace.
     using namespace drake::systems;
@@ -404,6 +445,13 @@ struct Impl {
     // wrapper to convert `Map<Derived>*` arguments.
     // N.B. This could be mitigated by using `EigenPtr` in public interfaces in
     // upstream code.
+
+    DefineTemplateClassWithDefault<
+        SingleOutputVectorSource<T>, PySingleOutputVectorSource, LeafSystem<T>>(
+        m, "SingleOutputVectorSource", GetPyParam<T>())
+        .def(py::init([](int size) {
+          return new PySingleOutputVectorSource(size);
+        }));
   }
 };
 
